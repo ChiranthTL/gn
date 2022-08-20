@@ -1,0 +1,123 @@
+
+<html>
+
+    <head>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+            integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+            crossorigin="" />
+        <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+            integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+            crossorigin=""></script>
+        <script src="https://code.jquery.com/jquery-2.2.4.min.js"
+            integrity="sha256-BbhdlvQf/xTY9gja0Dq3HiwQF8LaCRTXxZKRutelT44=" crossorigin="anonymous"></script>
+        <!-- <script src="https://unpkg.com/leaflet.nontiledlayer@1.0.9/dist/NonTiledLayer.js"></script> -->
+        <style>
+            #map {
+                width: 100%;
+                height: 100vh;
+            }
+        </style>
+    </head>
+    
+    <body>
+        <div id="map"></div>
+    </body>
+    
+    </html>
+    
+    <script>
+        var satellite_layer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+            id: 'mapbox.streets',
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+        });
+        var map_layer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            id: 'mapbox.streets',
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        });
+        // var map = L.map("map").setView([12.9716, 77.5946], 10);
+        var map = L.map('map', {
+            center: [12.9716, 77.5946],
+            zoom: 10,
+            layers: [map_layer]
+        });
+        $.ajax({
+            type: "GET",
+            url: `https://103.66.50.180:8081/geoserver/psc/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=psc%3Aramnagara_district&maxFeatures=50&outputFormat=application%2Fjson`,
+            dataType: 'json',
+            success: function (data) {
+                const layout = L.geoJson(data, {
+                    style: {
+                        opacity: 0
+                    },
+                }).addTo(map);
+                console.log('layout loaded')
+                map.fitBounds(layout.getBounds());
+            },
+            jsonp: false
+        });
+        map.on('moveend', function () {
+            console.log('moveend')
+            getLayers();
+        });
+        function getLayers() {
+            let bounds = map.getBounds();
+            let bbox = {
+                lowerCorner: { lat: bounds.getSouthWest().lat, lng: bounds.getSouthWest().lng },
+                upperCorner: { lat: bounds.getNorthEast().lat, lng: bounds.getNorthEast().lng }
+            }
+            // console.log(bbox)
+            $.ajax({
+                type: "POST",
+                url: "http://localhost:3000/bbox",
+                // dataType: "json",
+                // cache: false,
+                data: { bbox: bbox },
+                success: function (res) {
+                    res.data.map((d) => {
+                        console.log(d.title)
+                        console.log(d.name)
+                        loadlayers(d)
+                    })
+                    // console.log(res.data.length)
+                    // loadlayers(res.layers)
+                },
+                error: function (res) {
+                    alert("Null")
+                }
+            });
+        }
+        var wmsLayer;
+        function loadlayers(d) {
+            if (wmsLayer) map.removeLayer(wmsLayer)
+            L.tileLayer.wms('https://103.66.50.180:8081/geoserver/psc/wms', {
+                layers: d.name,
+                transparent: true,
+                // zIndex : 10,
+                format: 'image/png',
+                maxZoom: 22,
+                // tiled:true
+            }).addTo(map);
+            $.ajax({
+                type: "GET",
+                url: `https://103.66.50.180:8081/geoserver/psc/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=psc%3A${d.name}&outputFormat=application%2Fjson`,
+                dataType: 'json',
+                success: function (data) {
+                    L.geoJson(data, {
+                        style: {
+                            opacity: 0
+                        },
+                        onEachFeature: function (feature, layer) {
+                            layer.bindPopup(feature.properties.Name)
+                            // layer.bindPopup(`${feature.properties.category} : ${feature.properties.name}`)
+                        }
+                    }).addTo(map);
+                    // map.fitBounds(glayer.getBounds());
+                    // alert("geojson featurecollection from geoserver");
+                },
+    
+                jsonp: false
+            });
+        }
+    
+    </script>
+    
